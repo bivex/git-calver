@@ -288,28 +288,52 @@ install_hooks() {
     # Ensure hooks directory exists
     ensure_dir "$hooks_dir"
 
+    # Get the script directory and find hooks
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local install_root
+    install_root="$(dirname "$script_dir")"
+
+    # Try to find hooks in multiple locations
+    local hook_locations=(
+        "${install_root}/share/git-version/hooks"
+        "${PROJECT_ROOT}/hooks"
+        "/usr/local/share/git-version/hooks"
+        "$HOME/.local/share/git-version/hooks"
+    )
+
+    local post_commit_src=""
+    local pre_push_src=""
+
+    for location in "${hook_locations[@]}"; do
+        if [ -f "${location}/post-commit" ]; then
+            post_commit_src="${location}/post-commit"
+        fi
+        if [ -f "${location}/pre-push" ]; then
+            pre_push_src="${location}/pre-push"
+        fi
+    done
+
     # Install post-commit hook
-    local post_commit_src="${PROJECT_ROOT}/hooks/post-commit"
     local post_commit_dst="${hooks_dir}/post-commit"
 
-    if [ -f "$post_commit_src" ]; then
+    if [ -n "$post_commit_src" ] && [ -f "$post_commit_src" ]; then
         cp "$post_commit_src" "$post_commit_dst"
         chmod +x "$post_commit_dst"
         log_info "Installed post-commit hook"
     else
-        log_warn "post-commit hook not found at ${post_commit_src}"
+        log_warn "post-commit hook not found (run from project directory or install hooks from source)"
     fi
 
     # Install pre-push hook
-    local pre_push_src="${PROJECT_ROOT}/hooks/pre-push"
     local pre_push_dst="${hooks_dir}/pre-push"
 
-    if [ -f "$pre_push_src" ]; then
+    if [ -n "$pre_push_src" ] && [ -f "$pre_push_src" ]; then
         cp "$pre_push_src" "$pre_push_dst"
         chmod +x "$pre_push_dst"
         log_info "Installed pre-push hook"
     else
-        log_warn "pre-push hook not found at ${pre_push_src}"
+        log_warn "pre-push hook not found (run from project directory or install hooks from source)"
     fi
 
     log_info "Git hooks installed successfully"

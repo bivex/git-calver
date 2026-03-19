@@ -12,7 +12,11 @@
       "Bash(~/.local/bin/git-version init:*)",
       "Bash(./install.sh --uninstall)",
       "Bash(~/.local/bin/git-version next:*)",
-      "Bash(~/.local/bin/git-version bump:*)"
+      "Bash(~/.local/bin/git-version bump:*)",
+      "Bash(chmod +x hooks/post-commit)",
+      "Bash(~/.local/bin/git-version hooks:*)",
+      "Bash(bash .git/hooks/post-commit)",
+      "Bash(bash -x .git/hooks/post-commit)"
     ]
   }
 }

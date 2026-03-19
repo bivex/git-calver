@@ -87,6 +87,12 @@ install_lib_files() {
     if [ -d "${PROJECT_ROOT}/templates" ]; then
         cp -r "${PROJECT_ROOT}/templates" "${INSTALL_DIR}/../"
     fi
+
+    # Copy hooks directory
+    if [ -d "${PROJECT_ROOT}/hooks" ]; then
+        mkdir -p "${INSTALL_DIR}/../share/git-version"
+        cp -r "${PROJECT_ROOT}/hooks" "${INSTALL_DIR}/../share/git-version/"
+    fi
 }
 
 # Create config directory
@@ -126,6 +132,13 @@ uninstall() {
     if [ -d "$templates_dir" ]; then
         echo "Removing ${templates_dir}..."
         rm -rf "$templates_dir"
+    fi
+
+    # Remove share directory
+    local share_dir="${INSTALL_DIR}/../share/git-version"
+    if [ -d "$share_dir" ]; then
+        echo "Removing ${share_dir}..."
+        rm -rf "$share_dir"
     fi
 }
 

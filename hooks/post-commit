@@ -1,52 +1,65 @@
 #!/usr/bin/env bash
 # git-version post-commit hook
-# Automatically updates version after breaking change commits
-
-# Get the directory where this script is located
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$HOOK_DIR")"
-
-# Source libraries
-# shellcheck source=../lib/utils.sh
-source "${PROJECT_ROOT}/lib/utils.sh"
-# shellcheck source=../lib/conventional.sh
-source "${PROJECT_ROOT}/lib/conventional.sh"
-# shellcheck source=../lib/core.sh
-source "${PROJECT_ROOT}/lib/core.sh"
+# Automatically updates version after every commit
 
 # Configuration
-AUTO_BUMP_ON_BREAKING=${AUTO_BUMP_ON_BREAKING:-true}
+AUTO_BUMP=${AUTO_BUMP:-true}
 
-# Get the last commit
-LAST_COMMIT=$(git log -1 --pretty=format:"%H|%s")
+# Skip if auto-bump is disabled
+if [ "$AUTO_BUMP" != "true" ]; then
+    exit 0
+fi
 
-# Parse commit subject
-COMMIT_HASH=$(echo "$LAST_COMMIT" | cut -d'|' -f1)
-COMMIT_SUBJECT=$(echo "$LAST_COMMIT" | cut -d'|' -f2)
+# Get the last commit message
+LAST_COMMIT=$(git log -1 --pretty=format:"%s")
 
-# Check if this is a breaking change
-if is_breaking_change "$COMMIT_SUBJECT" "$COMMIT_HASH"; then
-    log_info "Breaking change detected in commit: $COMMIT_SUBJECT"
+# Skip commits that start with "chore: release" (release commits)
+if [[ "$LAST_COMMIT" =~ ^chore:\ release ]]; then
+    exit 0
+fi
 
-    if [ "$AUTO_BUMP_ON_BREAKING" = "true" ]; then
-        # Calculate new version
-        NEW_VERSION=$(calculate_next_version "major")
+# Find git-version command
+GIT_VERSION_CMD=""
+if command -v git-version >/dev/null 2>&1; then
+    GIT_VERSION_CMD="git-version"
+elif [ -f "$HOME/.local/bin/git-version" ]; then
+    GIT_VERSION_CMD="$HOME/.local/bin/git-version"
+elif [ -f "/usr/local/bin/git-version" ]; then
+    GIT_VERSION_CMD="/usr/local/bin/git-version"
+fi
 
-        # Get current version
-        CURRENT_VERSION=$(get_current_version)
+if [ -z "$GIT_VERSION_CMD" ]; then
+    exit 0
+fi
 
-        if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
-            log_info "Auto-bumping version: $CURRENT_VERSION → $NEW_VERSION"
+# Get current and next version (without color codes)
+CURRENT_VERSION=$($GIT_VERSION_CMD -q current 2>/dev/null || echo "")
+NEXT_VERSION=$($GIT_VERSION_CMD -q next 2>/dev/null | head -1 | tr -d '\033' | sed 's/\[[0-9;]*m//g' || echo "")
 
-            # Update VERSION.txt
-            write_file "${VERSION_FILE:-VERSION.txt}" "$NEW_VERSION"
+# Strip any remaining ANSI codes
+NEXT_VERSION=$(echo "$NEXT_VERSION" | sed 's/\[[0-9;]*m//g' | tr -d '[:cntrl:]')
 
-            # Stage VERSION.txt for the next commit
-            git add "${VERSION_FILE:-VERSION.txt}"
+# Only update if version changed and both are valid
+if [ -n "$NEXT_VERSION" ] && [ -n "$CURRENT_VERSION" ] && [ "$NEXT_VERSION" != "$CURRENT_VERSION" ]; then
+    # Update VERSION.txt (strip 'v' prefix)
+    echo "${NEXT_VERSION}" > VERSION.txt
 
-            log_info "Version updated to $NEW_VERSION (staged)"
+    # Update CHANGELOG.md
+    $GIT_VERSION_CMD changelog > /tmp/git-version-changelog.$$ 2>/dev/null || true
+    if [ -s /tmp/git-version-changelog.$$ ]; then
+        # Preserve header and prepend new entry
+        if [ -f CHANGELOG.md ]; then
+            head -n 3 CHANGELOG.md > /tmp/git-version-new.$$
+            tail -n +4 /tmp/git-version-changelog.$$ >> /tmp/git-version-new.$$
+            mv /tmp/git-version-new.$$ CHANGELOG.md
+        else
+            mv /tmp/git-version-changelog.$$ CHANGELOG.md
         fi
     fi
+    rm -f /tmp/git-version-changelog.$$
+
+    # Stage files for the next commit
+    git add VERSION.txt CHANGELOG.md 2>/dev/null || true
 fi
 
 exit 0
