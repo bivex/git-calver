@@ -2,6 +2,11 @@
 # git-version utility functions
 # Provides logging, error handling, and common operations
 
+# Guard against double sourcing
+if declare -F log_error >/dev/null 2>&1; then
+    return 0
+fi
+
 # Color codes for output
 readonly COLOR_RED='\033[0;31m'
 readonly COLOR_GREEN='\033[0;32m'

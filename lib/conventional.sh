@@ -2,6 +2,11 @@
 # git-version conventional commits parser
 # Parses conventional commits and identifies version bump requirements
 
+# Guard against double sourcing
+if declare -F parse_commit_type >/dev/null 2>&1; then
+    return 0
+fi
+
 # Source utility functions
 # shellcheck source=./lib/utils.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -2,6 +2,11 @@
 # git-version git operations wrapper
 # Provides git-related operations for version management
 
+# Guard against double sourcing
+if declare -F get_last_version >/dev/null 2>&1; then
+    return 0
+fi
+
 # Source utility functions
 # shellcheck source=./lib/utils.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

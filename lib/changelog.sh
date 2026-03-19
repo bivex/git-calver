@@ -2,6 +2,11 @@
 # git-version changelog generation
 # Generates and maintains CHANGELOG.md
 
+# Guard against double sourcing
+if declare -F update_changelog >/dev/null 2>&1; then
+    return 0
+fi
+
 # Source utility functions
 # shellcheck source=./lib/utils.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +38,7 @@ init_changelog() {
 
 # Get changelog template content
 get_changelog_template() {
-    if [ -f "$CHANGELOG_TEMPLATE" ]; then
+    if [ -n "$CHANGELOG_TEMPLATE" ] && [ -f "$CHANGELOG_TEMPLATE" ]; then
         cat "$CHANGELOG_TEMPLATE"
     else
         # Default template

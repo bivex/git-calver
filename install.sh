@@ -68,20 +68,25 @@ install_script() {
     fi
 }
 
-# Create symlinks for library files
-create_lib_symlinks() {
+# Copy library files
+install_lib_files() {
     local lib_dir="${PROJECT_ROOT}/lib"
-    local target_dir="${INSTALL_DIR}/../lib/git-version"
+    local target_dir="${INSTALL_DIR}/../lib"
 
     # Create target directory
     mkdir -p "$target_dir"
 
-    # Link library files
+    # Copy library files
     for lib_file in "${lib_dir}"/*.sh; do
         local base_name
         base_name=$(basename "$lib_file")
-        ln -sf "$lib_file" "${target_dir}/${base_name}"
+        cp "$lib_file" "${target_dir}/${base_name}"
     done
+
+    # Copy templates directory
+    if [ -d "${PROJECT_ROOT}/templates" ]; then
+        cp -r "${PROJECT_ROOT}/templates" "${INSTALL_DIR}/../"
+    fi
 }
 
 # Create config directory
@@ -109,11 +114,18 @@ uninstall() {
         echo -e "${COLOR_YELLOW}git-version is not installed${COLOR_RESET}"
     fi
 
-    # Remove lib symlinks
-    local lib_dir="${INSTALL_DIR}/../lib/git-version"
+    # Remove lib files
+    local lib_dir="${INSTALL_DIR}/../lib"
     if [ -d "$lib_dir" ]; then
         echo "Removing ${lib_dir}..."
         rm -rf "$lib_dir"
+    fi
+
+    # Remove templates directory
+    local templates_dir="${INSTALL_DIR}/../templates"
+    if [ -d "$templates_dir" ]; then
+        echo "Removing ${templates_dir}..."
+        rm -rf "$templates_dir"
     fi
 }
 
@@ -175,7 +187,7 @@ main() {
 
     # Install
     install_script
-    create_lib_symlinks
+    install_lib_files
     create_config_dir
 }
 

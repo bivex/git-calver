@@ -2,6 +2,11 @@
 # git-version core version calculation
 # Implements calendar-based versioning with daily increments
 
+# Guard against double sourcing
+if declare -F calculate_next_version >/dev/null 2>&1; then
+    return 0
+fi
+
 # Source utility functions
 # shellcheck source=./lib/utils.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +23,7 @@ source "${SCRIPT_DIR}/conventional.sh"
 # Default configuration
 VERSION_FILE="${VERSION_FILE:-VERSION.txt}"
 CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG.md}"
-CHANGELOG_TEMPLATE="${CHANGELOG_TEMPLATE:-templates/CHANGELOG.md.tmpl}"
+CHANGELOG_TEMPLATE="${CHANGELOG_TEMPLATE:-}"
 
 # Initialize versioning in a new repository
 init_versioning() {
