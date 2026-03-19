@@ -16,7 +16,8 @@
       "Bash(chmod +x hooks/post-commit)",
       "Bash(~/.local/bin/git-version hooks:*)",
       "Bash(bash .git/hooks/post-commit)",
-      "Bash(bash -x .git/hooks/post-commit)"
+      "Bash(bash -x .git/hooks/post-commit)",
+      "Bash(chmod +x hooks/pre-push)"
     ]
   }
 }
