@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git --version)",
+      "WebSearch",
+      "Bash(chmod +x bin/git-version install.sh hooks/post-commit hooks/pre-push)",
+      "Bash(chmod +x lib/*.sh)",
+      "Bash(./install.sh)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

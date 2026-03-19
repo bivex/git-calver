@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# git-version post-commit hook
+# Automatically updates version after breaking change commits
+
+# Get the directory where this script is located
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$HOOK_DIR")"
+
+# Source libraries
+# shellcheck source=../lib/utils.sh
+source "${PROJECT_ROOT}/lib/utils.sh"
+# shellcheck source=../lib/conventional.sh
+source "${PROJECT_ROOT}/lib/conventional.sh"
+# shellcheck source=../lib/core.sh
+source "${PROJECT_ROOT}/lib/core.sh"
+
+# Configuration
+AUTO_BUMP_ON_BREAKING=${AUTO_BUMP_ON_BREAKING:-true}
+
+# Get the last commit
+LAST_COMMIT=$(git log -1 --pretty=format:"%H|%s")
+
+# Parse commit subject
+COMMIT_HASH=$(echo "$LAST_COMMIT" | cut -d'|' -f1)
+COMMIT_SUBJECT=$(echo "$LAST_COMMIT" | cut -d'|' -f2)
+
+# Check if this is a breaking change
+if is_breaking_change "$COMMIT_SUBJECT" "$COMMIT_HASH"; then
+    log_info "Breaking change detected in commit: $COMMIT_SUBJECT"
+
+    if [ "$AUTO_BUMP_ON_BREAKING" = "true" ]; then
+        # Calculate new version
+        NEW_VERSION=$(calculate_next_version "major")
+
+        # Get current version
+        CURRENT_VERSION=$(get_current_version)
+
+        if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+            log_info "Auto-bumping version: $CURRENT_VERSION → $NEW_VERSION"
+
+            # Update VERSION.txt
+            write_file "${VERSION_FILE:-VERSION.txt}" "$NEW_VERSION"
+
+            # Stage VERSION.txt for the next commit
+            git add "${VERSION_FILE:-VERSION.txt}"
+
+            log_info "Version updated to $NEW_VERSION (staged)"
+        fi
+    fi
+fi
+
+exit 0

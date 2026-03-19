@@ -1,0 +1,340 @@
+#!/usr/bin/env bash
+# git-version - Calendar-based versioning for git repositories
+# Main CLI entry point
+
+set -euo pipefail
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Source libraries
+# shellcheck source=../lib/utils.sh
+source "${PROJECT_ROOT}/lib/utils.sh"
+# shellcheck source=../lib/git.sh
+source "${PROJECT_ROOT}/lib/git.sh"
+# shellcheck source=../lib/conventional.sh
+source "${PROJECT_ROOT}/lib/conventional.sh"
+# shellcheck source=../lib/core.sh
+source "${PROJECT_ROOT}/lib/core.sh"
+# shellcheck source=../lib/changelog.sh
+source "${PROJECT_ROOT}/lib/changelog.sh"
+
+# Script version
+readonly GIT_VERSION="0.1.0"
+
+# Default configuration
+VERSION_FILE="${VERSION_FILE:-VERSION.txt}"
+CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG.md}"
+CHANGELOG_TEMPLATE="${CHANGELOG_TEMPLATE:-${PROJECT_ROOT}/templates/CHANGELOG.md.tmpl}"
+
+# Usage
+show_usage() {
+    cat << EOF
+git-version ${GIT_VERSION}
+Calendar-based versioning for git repositories
+
+USAGE:
+    git-version [OPTIONS] <COMMAND>
+
+COMMANDS:
+    current              Show current version
+    next                 Show next version (without applying)
+    bump [type]          Bump version and create tag
+                        type: major, minor, patch, force (default: auto)
+    changelog [since]    Generate changelog since last version or date
+    init                 Initialize versioning in repository
+    hooks install        Install git hooks
+    hooks uninstall      Uninstall git hooks
+    validate <commit>    Validate conventional commit format
+    help                 Show this help message
+
+OPTIONS:
+    -q, --quiet          Suppress output (except errors)
+    -v, --verbose        Increase verbosity
+    --no-tag             Bump without creating git tag
+    -h, --help           Show help
+
+ENVIRONMENT:
+    VERSION_FILE         Path to VERSION.txt (default: ./VERSION.txt)
+    CHANGELOG_FILE       Path to CHANGELOG.md (default: ./CHANGELOG.md)
+    VERBOSITY            Output level: 0=error, 1=warn, 2=info, 3=debug
+
+EXAMPLES:
+    git-version current              # Show current version
+    git-version next                 # Show what the next version would be
+    git-version bump                 # Bump version based on commits
+    git-version bump patch           # Force a patch bump
+    git-version changelog            # Generate changelog for pending changes
+    git-version init                 # Initialize in a new repository
+
+EOF
+}
+
+# Parse arguments
+parse_args() {
+    COMMAND=""
+    ARGS=()
+    OPT_QUIET=false
+    OPT_VERBOSE=false
+    OPT_NO_TAG=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -q|--quiet)
+                OPT_QUIET=true
+                VERBOSITY=0
+                shift
+                ;;
+            -v|--verbose)
+                OPT_VERBOSE=true
+                VERBOSITY=3
+                shift
+                ;;
+            --no-tag)
+                OPT_NO_TAG=true
+                shift
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            current|next|bump|changelog|init|hooks|validate|help)
+                COMMAND="$1"
+                shift
+                ARGS=("$@")
+                break
+                ;;
+            *)
+                if [ -z "$COMMAND" ]; then
+                    log_error "Unknown option: $1"
+                    show_usage
+                    exit 1
+                fi
+                ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Handle help command
+    if [ "$COMMAND" = "help" ]; then
+        show_usage
+        exit 0
+    fi
+}
+
+# Main command handler
+main() {
+    parse_args "$@"
+
+    # Validate we're in a git repository (except for help)
+    if [ -n "$COMMAND" ] && [ "$COMMAND" != "help" ]; then
+        if ! is_git_repo; then
+            die "Not a git repository. Run from inside a git repository."
+        fi
+    fi
+
+    # Handle empty command
+    if [ -z "$COMMAND" ]; then
+        show_usage
+        exit 1
+    fi
+
+    # Execute command
+    case "$COMMAND" in
+        current)
+            cmd_current
+            ;;
+        next)
+            cmd_next
+            ;;
+        bump)
+            cmd_bump "${ARGS[@]:-}"
+            ;;
+        changelog)
+            cmd_changelog "${ARGS[@]:-}"
+            ;;
+        init)
+            cmd_init
+            ;;
+        hooks)
+            cmd_hooks "${ARGS[@]:-}"
+            ;;
+        validate)
+            cmd_validate "${ARGS[@]:-}"
+            ;;
+        *)
+            log_error "Unknown command: ${COMMAND}"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Command: current
+cmd_current() {
+    local current
+    current=$(get_current_version)
+    log_version "$current"
+}
+
+# Command: next
+cmd_next() {
+    local bump_type="${1:-}"
+    show_next_version "$bump_type"
+}
+
+# Command: bump
+cmd_bump() {
+    local bump_type="${1:-}"
+    local skip_tag="false"
+
+    if [ "$OPT_NO_TAG" = true ]; then
+        skip_tag="true"
+    fi
+
+    # Validate bump type if provided
+    if [ -n "$bump_type" ]; then
+        case "$bump_type" in
+            major|minor|patch|force)
+                ;;
+            *)
+                die "Invalid bump type: ${bump_type}. Use: major, minor, patch, or force"
+                ;;
+        esac
+    fi
+
+    # Check for uncommitted changes
+    if ! is_working_dir_clean && [ "$skip_tag" != "true" ]; then
+        log_warn "Uncommitted changes detected. Consider committing first."
+    fi
+
+    apply_version_bump "$bump_type" "$skip_tag"
+}
+
+# Command: changelog
+cmd_changelog() {
+    local since="${1:-}"
+    generate_changelog_since "$since"
+}
+
+# Command: init
+cmd_init() {
+    # Check if already initialized
+    if [ -f "$VERSION_FILE" ] && [ -n "$(get_last_version)" ]; then
+        log_info "Already initialized"
+        log_info "Current version: $(get_current_version)"
+        return
+    fi
+
+    init_versioning
+    init_changelog
+
+    # Offer to install hooks
+    if [ -t 1 ]; then  # Interactive terminal
+        echo
+        read -p "Install git hooks? (y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            install_hooks
+        fi
+    fi
+}
+
+# Command: hooks
+cmd_hooks() {
+    local action="${1:-}"
+
+    case "$action" in
+        install)
+            install_hooks
+            ;;
+        uninstall)
+            uninstall_hooks
+            ;;
+        *)
+            log_error "Unknown hooks command: ${action}"
+            log_info "Use: git-version hooks install|uninstall"
+            exit 1
+            ;;
+    esac
+}
+
+# Command: validate
+cmd_validate() {
+    local commit_msg="$1"
+
+    if [ -z "$commit_msg" ]; then
+        # Read from stdin
+        commit_msg=$(cat)
+    fi
+
+    if validate_conventional_commit "$commit_msg"; then
+        log_info "Valid conventional commit"
+        exit 0
+    else
+        exit 1
+    fi
+}
+
+# Install git hooks
+install_hooks() {
+    log_info "Installing git hooks..."
+
+    local hooks_dir
+    hooks_dir="$(get_git_root)/.git/hooks"
+
+    # Ensure hooks directory exists
+    ensure_dir "$hooks_dir"
+
+    # Install post-commit hook
+    local post_commit_src="${PROJECT_ROOT}/hooks/post-commit"
+    local post_commit_dst="${hooks_dir}/post-commit"
+
+    if [ -f "$post_commit_src" ]; then
+        cp "$post_commit_src" "$post_commit_dst"
+        chmod +x "$post_commit_dst"
+        log_info "Installed post-commit hook"
+    else
+        log_warn "post-commit hook not found at ${post_commit_src}"
+    fi
+
+    # Install pre-push hook
+    local pre_push_src="${PROJECT_ROOT}/hooks/pre-push"
+    local pre_push_dst="${hooks_dir}/pre-push"
+
+    if [ -f "$pre_push_src" ]; then
+        cp "$pre_push_src" "$pre_push_dst"
+        chmod +x "$pre_push_dst"
+        log_info "Installed pre-push hook"
+    else
+        log_warn "pre-push hook not found at ${pre_push_src}"
+    fi
+
+    log_info "Git hooks installed successfully"
+}
+
+# Uninstall git hooks
+uninstall_hooks() {
+    log_info "Uninstalling git hooks..."
+
+    local hooks_dir
+    hooks_dir="$(get_git_root)/.git/hooks"
+
+    # Remove hooks
+    if [ -f "${hooks_dir}/post-commit" ]; then
+        rm -f "${hooks_dir}/post-commit"
+        log_info "Removed post-commit hook"
+    fi
+
+    if [ -f "${hooks_dir}/pre-push" ]; then
+        rm -f "${hooks_dir}/pre-push"
+        log_info "Removed pre-push hook"
+    fi
+
+    log_info "Git hooks uninstalled"
+}
+
+# Run main
+main "$@"
