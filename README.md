@@ -54,19 +54,18 @@ INSTALL_DIR=/usr/local/bin ./install.sh
 
 ## Use in a New Project
 
-Minimal flow:
+Minimal setup:
 
 ```bash
 cd /path/to/your/project
 git-version init
-git-version release
 ```
 
-That creates:
+`init` creates:
 
 - `VERSION.txt`
 - `CHANGELOG.md`
-- the first annotated tag
+- the first annotated tag if the repository does not already have one
 
 ### Recommended integration
 
@@ -125,6 +124,8 @@ Prints the current version from `VERSION.txt` or the latest matching tag.
 
 Prints the version that would be produced next without changing files.
 
+If there are no unreleased commits, it prints the current version.
+
 ### `git-version bump [major|minor|patch|force]`
 
 Prepares the next version locally.
@@ -134,7 +135,7 @@ Current behavior:
 - updates `VERSION.txt`
 - updates `CHANGELOG.md`
 - stages those files
-- creates a tag unless `--no-tag` is used
+- creates an annotated tag unless `--no-tag` is used
 - does not create the release commit for you
 
 Use this if you want to control the commit step manually.
@@ -151,6 +152,8 @@ Current behavior:
 - creates a release commit
 - creates an annotated tag
 - optionally pushes the current branch and reachable tags
+
+If there are no unreleased commits and no explicit bump type is given, it exits without creating a new release.
 
 Examples:
 
@@ -179,14 +182,16 @@ Checks whether a commit subject matches the expected conventional format.
 
 ## Conventional Commit Handling
 
-Recognized bump signals:
+Conventional commit subjects are used for validation and changelog grouping.
+
+Accepted patterns that the tool treats specially:
 
 | Commit form | Meaning |
 |-------------|---------|
-| `feat!:` or `BREAKING CHANGE:` | breaking change |
-| `feat:` | feature |
-| `fix:`, `perf:`, `refactor:` | patch-level change |
-| `bump: major|minor|patch|force` | explicit override |
+| `feat!:` or `BREAKING CHANGE:` | marked as breaking in changelog |
+| `feat:` | grouped under `Added` |
+| `fix:`, `perf:`, `refactor:` | grouped under `Fixed` or `Changed` |
+| `bump: major|minor|patch|force` | explicit release override |
 
 Examples:
 
@@ -214,6 +219,9 @@ Receives generated entries grouped by commit category.
 ## Notes and Limits
 
 - The tool uses git tags as release markers.
+- The version format is always CalVer: `vYYYY.MM.DD` or `vYYYY.MM.DD-N`.
+- `major`, `minor`, and `patch` are accepted inputs, but they do not produce different version shapes the way SemVer does.
+- Any unreleased commits can advance the version; conventional commit types mainly improve classification and validation.
 - If you auto-update versions locally without creating tags, later behavior depends on your hook workflow.
 - `release` is the most reliable command for end-to-end releases.
 - The shipped hook templates are a starting point, not a universal policy for every repository.
