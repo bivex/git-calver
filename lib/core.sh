@@ -43,7 +43,7 @@ init_versioning() {
 
     # Create CHANGELOG.md if it doesn't exist
     if [ ! -f "$CHANGELOG_FILE" ]; then
-        write_file "$CHANGELOG_FILE" "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n"
+        write_file "$CHANGELOG_FILE" $'# Changelog\n\nAll notable changes to this project will be documented in this file.\n'
         log_info "Created ${CHANGELOG_FILE}"
     else
         log_info "${CHANGELOG_FILE} already exists"
@@ -175,12 +175,13 @@ apply_version_bump() {
     # Update CHANGELOG.md
     update_changelog "$last_version" "$next_version"
 
+    # Stage VERSION.txt and CHANGELOG.md for the next release commit
+    git_add "$VERSION_FILE" "$CHANGELOG_FILE"
+    log_info "Staged ${VERSION_FILE} and ${CHANGELOG_FILE}"
+
     # Create git tag
     if [ "$skip_tag" != "true" ]; then
         create_tag "$next_version" "Release ${next_version}"
-
-        # Stage VERSION.txt and CHANGELOG.md
-        git_add "$VERSION_FILE" "$CHANGELOG_FILE"
 
         log_info "Version bump complete: ${next_version}"
         log_info "Files staged. Commit with: git commit -m 'chore: release ${next_version}'"

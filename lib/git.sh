@@ -133,11 +133,31 @@ tag_exists() {
 push_tags() {
     local remote="${1:-origin}"
     log_info "Pushing tags to ${remote}..."
-    if git push "${remote}" --tags 2>/dev/null; then
+    if git push --quiet "${remote}" --tags; then
         log_info "Tags pushed successfully"
         return 0
     else
         log_error "Failed to push tags"
+        return 1
+    fi
+}
+
+# Push the current branch together with any reachable annotated tags
+push_branch_with_tags() {
+    local remote="${1:-origin}"
+    local branch="$2"
+
+    if [ -z "$branch" ]; then
+        log_error "Branch name is required to push"
+        return 1
+    fi
+
+    log_info "Pushing ${branch} and release tags to ${remote}..."
+    if git push --quiet "${remote}" "${branch}" --follow-tags; then
+        log_info "Branch and tags pushed successfully"
+        return 0
+    else
+        log_error "Failed to push branch and tags"
         return 1
     fi
 }
@@ -195,7 +215,12 @@ get_commit_date_utc() {
 
 # Check if working directory is clean
 is_working_dir_clean() {
-    git diff-index --quiet HEAD -- 2>/dev/null
+    [ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]
+}
+
+# Check if working tree is pristine, including untracked files
+is_working_tree_pristine() {
+    [ -z "$(git status --porcelain 2>/dev/null)" ]
 }
 
 # Get modified files
@@ -210,14 +235,13 @@ get_untracked_files() {
 
 # Add files to git
 git_add() {
-    local files="$*"
-    git add $files 2>/dev/null
+    git add "$@" 2>/dev/null
 }
 
 # Commit changes
 git_commit() {
     local message="$1"
-    git commit -m "$message" 2>/dev/null
+    git commit -q -m "$message"
 }
 
 # Check if remote exists
@@ -297,10 +321,10 @@ get_all_commits_structured() {
 export -f get_last_version get_all_versions get_last_version_date
 export -f get_commits_since get_commits_since_last_version get_last_n_commits
 export -f get_current_branch get_short_hash get_full_hash has_new_commits
-export -f create_tag delete_tag tag_exists push_tags
+export -f create_tag delete_tag tag_exists push_tags push_branch_with_tags
 export -f get_commit_body get_commit_subject get_commits_matching
 export -f has_breaking_change_footer has_breaking_change_subject
 export -f get_commit_author get_commit_date_utc
-export -f is_working_dir_clean get_modified_files get_untracked_files
+export -f is_working_dir_clean is_working_tree_pristine get_modified_files get_untracked_files
 export -f git_add git_commit remote_exists get_remote_url get_repo_name can_push
 export -f get_commit_count get_commits_by_type get_all_commits_structured

@@ -31,7 +31,7 @@ readonly SECTION_INTERNAL="Internal"
 # Initialize changelog
 init_changelog() {
     if [ ! -f "$CHANGELOG_FILE" ]; then
-        write_file "$CHANGELOG_FILE" "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n"
+        write_file "$CHANGELOG_FILE" $'# Changelog\n\nAll notable changes to this project will be documented in this file.\n'
         log_info "Created ${CHANGELOG_FILE}"
     fi
 }

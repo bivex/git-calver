@@ -42,6 +42,8 @@ COMMANDS:
     next                 Show next version (without applying)
     bump [type]          Bump version and create tag
                         type: major, minor, patch, force (default: auto)
+    release [type]       Prepare release files, create release commit, and tag
+                        options: --push, --remote <name>
     changelog [since]    Generate changelog since last version or date
     init                 Initialize versioning in repository
     hooks install        Install git hooks
@@ -64,6 +66,8 @@ EXAMPLES:
     git-version current              # Show current version
     git-version next                 # Show what the next version would be
     git-version bump                 # Bump version based on commits
+    git-version release              # Create release commit and tag
+    git-version release --push       # Release and push current branch with tags
     git-version bump patch           # Force a patch bump
     git-version changelog            # Generate changelog for pending changes
     git-version init                 # Initialize in a new repository
@@ -99,7 +103,7 @@ parse_args() {
                 show_usage
                 exit 0
                 ;;
-            current|next|bump|changelog|init|hooks|validate|help)
+            current|next|bump|release|changelog|init|hooks|validate|help)
                 COMMAND="$1"
                 shift
                 ARGS=("$@")
@@ -150,19 +154,22 @@ main() {
             cmd_next
             ;;
         bump)
-            cmd_bump "${ARGS[@]:-}"
+            cmd_bump "${ARGS[@]}"
+            ;;
+        release)
+            cmd_release "${ARGS[@]}"
             ;;
         changelog)
-            cmd_changelog "${ARGS[@]:-}"
+            cmd_changelog "${ARGS[@]}"
             ;;
         init)
             cmd_init
             ;;
         hooks)
-            cmd_hooks "${ARGS[@]:-}"
+            cmd_hooks "${ARGS[@]}"
             ;;
         validate)
-            cmd_validate "${ARGS[@]:-}"
+            cmd_validate "${ARGS[@]}"
             ;;
         *)
             log_error "Unknown command: ${COMMAND}"
@@ -211,6 +218,118 @@ cmd_bump() {
     fi
 
     apply_version_bump "$bump_type" "$skip_tag"
+}
+
+# Show release-specific help
+show_release_usage() {
+    cat << EOF
+git-version release
+Create a release commit, tag it, and optionally push it.
+
+USAGE:
+    git-version release [type] [--push] [--remote <name>]
+
+ARGS:
+    type                major, minor, patch, or force (default: auto)
+
+OPTIONS:
+    --push              Push the current branch and release tag after commit
+    --remote <name>     Remote to push to (default: origin)
+
+EXAMPLES:
+    git-version release
+    git-version release patch
+    git-version release --push
+    git-version release minor --push --remote origin
+EOF
+}
+
+# Command: release
+cmd_release() {
+    local bump_type=""
+    local should_push="false"
+    local remote="origin"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            major|minor|patch|force)
+                if [ -n "$bump_type" ]; then
+                    die "Bump type already set to ${bump_type}"
+                fi
+                bump_type="$1"
+                shift
+                ;;
+            --push)
+                should_push="true"
+                shift
+                ;;
+            --remote)
+                shift
+                [ $# -gt 0 ] || die "Missing value for --remote"
+                remote="$1"
+                shift
+                ;;
+            -h|--help)
+                show_release_usage
+                return 0
+                ;;
+            *)
+                die "Unknown release option: ${1}"
+                ;;
+        esac
+    done
+
+    if ! is_working_tree_pristine; then
+        die "Working tree must be clean before release. Commit or stash your changes first."
+    fi
+
+    local last_version
+    last_version=$(get_last_version)
+
+    local next_version
+    next_version=$(calculate_next_version "$bump_type")
+
+    if [ "$next_version" = "$last_version" ] && [ -z "$bump_type" ]; then
+        log_info "No releasable changes since ${last_version:-repository start}"
+        return 0
+    fi
+
+    apply_version_bump "$bump_type" "true"
+
+    if ! git_commit "chore: release ${next_version}"; then
+        die "Failed to create release commit"
+    fi
+    log_info "Created release commit: chore: release ${next_version}"
+
+    create_tag "$next_version" "Release ${next_version}"
+
+    if [ "$should_push" = "true" ]; then
+        if ! remote_exists "$remote"; then
+            die "Remote not found: ${remote}"
+        fi
+
+        local branch
+        branch=$(get_current_branch)
+        if [ "$branch" = "detached" ]; then
+            die "Cannot push release from detached HEAD"
+        fi
+
+        push_branch_with_tags "$remote" "$branch"
+        log_info "Release published: ${next_version}"
+        return 0
+    fi
+
+    log_info "Release complete: ${next_version}"
+
+    local branch
+    branch=$(get_current_branch)
+    if [ "$branch" = "detached" ]; then
+        log_info "Tag created locally. Push the release from a named branch when ready."
+    elif remote_exists "$remote"; then
+        log_info "Push when ready: git push ${remote} ${branch} --follow-tags"
+    else
+        log_info "No remote named ${remote} is configured. Release exists locally only."
+    fi
 }
 
 # Command: changelog

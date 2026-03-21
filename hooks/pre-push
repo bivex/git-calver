@@ -52,11 +52,11 @@ TAG_VERSION="v${FILE_VERSION}"
 # Check if tag exists locally
 if ! git rev-parse -q --verify "refs/tags/${TAG_VERSION}" >/dev/null 2>&1; then
     echo "Warning: Tag $TAG_VERSION does not exist"
-    echo "Run 'git-version bump' to create the tag"
+    echo "Run 'git-version release' to create the release commit and tag"
     read -p "Push anyway? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Push cancelled. Create version tag with: git-version bump"
+        echo "Push cancelled. Create the release with: git-version release"
         exit 1
     fi
 fi

@@ -32,8 +32,8 @@ git-version init
 # Make some commits
 git commit -m "feat: add new feature"
 
-# Bump version (creates VERSION.txt, CHANGELOG.md, and git tag)
-git-version bump
+# Release in one command (updates files, creates release commit, and tags it)
+git-version release
 
 # Show current version
 git-version current
@@ -98,7 +98,7 @@ git-version next
 
 ### `git-version bump [type]`
 
-Bump the version and create a git tag.
+Prepare the next version manually. This updates release files and creates a tag, but leaves the release commit to you.
 
 ```bash
 # Auto-detect bump level from commits
@@ -111,6 +111,21 @@ git-version bump patch   # Bug fix
 
 # Bump without creating a tag
 git-version --no-tag bump
+```
+
+### `git-version release [type] [--push]`
+
+Create the release end-to-end in one command.
+
+```bash
+# Create VERSION.txt / CHANGELOG.md updates, commit them, and tag the release
+git-version release
+
+# Force a specific release type
+git-version release patch
+
+# Release and push the current branch with tags
+git-version release --push
 ```
 
 ### `git-version changelog [since]`
@@ -191,7 +206,7 @@ cp /Volumes/External/Code/git_verisoner/config/git-version.conf ./git-version.co
 
 ### Post-commit Hook
 
-Automatically bumps the version after breaking change commits:
+Automatically stages updated release files after commits when the version changes:
 
 ```bash
 # After committing a breaking change
@@ -207,7 +222,7 @@ Validates that a version tag exists before pushing:
 ```bash
 git push
 # Error: Tag v2025.03.19 does not exist
-# Run 'git-version bump' to create the tag
+# Run 'git-version release' to create the release commit and tag
 ```
 
 ## Workflow Examples
@@ -222,17 +237,12 @@ git-version init
 git commit -m "feat: add new feature"
 git commit -m "fix: handle edge case"
 
-# 3. Bump version
-git-version bump
-# Creates VERSION.txt with v2025.03.19
-# Updates CHANGELOG.md
+# 3. Release
+git-version release --push
+# Updates VERSION.txt and CHANGELOG.md
+# Creates commit chore: release v2025.03.19
 # Creates git tag v2025.03.19
-
-# 4. Commit version files
-git commit -m "chore: release v2025.03.19"
-
-# 5. Push
-git push origin main --tags
+# Pushes branch and tag
 ```
 
 ### Breaking Change Workflow
@@ -241,13 +251,10 @@ git push origin main --tags
 # 1. Make breaking change
 git commit -m "feat!: remove deprecated endpoint"
 
-# 2. Post-commit hook auto-updates VERSION.txt (if installed)
-# VERSION.txt now contains v2025.03.19
+# 2. Post-commit hook can pre-stage release files (if installed)
 
-# 3. Complete the release
-git add VERSION.txt
-git commit -m "chore: release v2025.03.19"
-git-version bump  # Creates the tag
+# 3. Finalize the release
+git-version release
 ```
 
 ### Multiple Releases Per Day
@@ -255,18 +262,18 @@ git-version bump  # Creates the tag
 ```bash
 # Morning release
 git commit -m "feat: add feature A"
-git-version bump
-# VERSION.txt: v2025.03.19
+git-version release
+# VERSION.txt: v2025.03.19 and tag created
 
 # Afternoon release
 git commit -m "feat: add feature B"
-git-version bump
-# VERSION.txt: v2025.03.19-1
+git-version release
+# VERSION.txt: v2025.03.19-1 and tag created
 
 # Evening release
 git commit -m "fix: critical bug"
-git-version bump
-# VERSION.txt: v2025.03.19-2
+git-version release
+# VERSION.txt: v2025.03.19-2 and tag created
 ```
 
 ## Output Files
@@ -309,10 +316,8 @@ All dates are calculated using **UTC** to ensure consistency across different en
 
 ```yaml
 # GitHub Actions example
-- name: Bump version
-  run: |
-    git-version bump
-    git push origin main --tags
+- name: Create release
+  run: git-version release --push
 ```
 
 ### Pre-commit Hook
